@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>每日飲食與飲水紀錄</title>
+    <style>
+        body { font-family: sans-serif; padding: 15px; max-width: 400px; margin: auto; background-color: #f4f4f9; }
+        .card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h3 { margin-top: 0; display: flex; justify-content: space-between; align-items: center; font-size: 18px; }
+        .target-box { font-size: 14px; font-weight: normal; color: #555; }
+        .target-box input { width: 40px; padding: 2px; text-align: center; border: 1px solid #ccc; border-radius: 3px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        input[type="number"] { flex: 1; padding: 8px; font-size: 16px; border: 1px solid #ccc; border-radius: 5px; }
+        button { padding: 8px 15px; font-size: 16px; background: #007BFF; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .reset-btn { background: #dc3545; width: 100%; padding: 12px; }
+        .status { font-size: 14px; margin-left: 10px; font-weight: bold; }
+        .img-preview { max-width: 100%; margin-top: 10px; border-radius: 5px; display: none; }
+        #yesterday-alert { background: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; margin-bottom: 15px; display: none; border-left: 5px solid #ffeeba; }
+    </style>
+</head>
+<body>
+
+    <h2>📊 今日攝取紀錄</h2>
+    <div id="yesterday-alert"></div>
+
+    <div class="card">
+        <h3>💧 水分 (ml)</h3>
+        <div class="input-group">
+            <input type="number" id="water" value="250" step="50">
+            <button onclick="add('water')">新增</button>
+        </div>
+        <p>今日總計: <strong id="water-total" style="color:#007BFF; font-size:20px;">0</strong> ml</p>
+    </div>
+
+    <div class="card">
+        <h3>🍚 澱粉 (份) 
+            <span class="target-box">🎯目標: <input type="number" id="carbs-target" value="5" step="0.5"></span>
+        </h3>
+        <div class="input-group">
+            <input type="number" id="carbs" value="1" step="0.5">
+            <button onclick="add('carbs')">新增</button>
+        </div>
+        <p>今日總計: <strong id="carbs-total" style="color:#d97706; font-size:20px;">0</strong> 份 <span id="carbs-status" class="status"></span></p>
+    </div>
+
+    <div class="card">
+        <h3>🥩 蛋白質 (份)
+            <span class="target-box">🎯目標: <input type="number" id="protein-target" value="5" step="0.5"></span>
+        </h3>
+        <div class="input-group">
+            <input type="number" id="protein" value="1" step="0.5">
+            <button onclick="add('protein')">新增</button>
+        </div>
+        <p>今日總計: <strong id="protein-total" style="color:#28a745; font-size:20px;">0</strong> 份 <span id="protein-status" class="status"></span></p>
+    </div>
+
+    <div class="card">
+        <h3>📷 今日餐點相片</h3>
+        <input type="file" id="photo-upload" accept="image/*" style="width: 100%; margin-bottom: 10px;">
+        <img id="photo-preview" class="img-preview">
+    </div>
+
+    <button class="reset-btn" onclick="resetData()">🗑️ 清空今日紀錄</button>
+
+    <script>
+        function getTodayString() {
+            const today = new Date();
+            return today.getFullYear() + '-' + (today.getMonth() + 1) + '-' + today.getDate();
+        }
+
+        const currentDay = getTodayString();
+        let savedData = JSON.parse(localStorage.getItem('myDietTracker'));
+        let data;
+
+        if (savedData && savedData.date === currentDay) {
+            data = savedData.records;
+        } else {
+            // 檢查昨天是否未達標
+            if (savedData && savedData.date !== currentDay) {
+                let yData = savedData.records;
+                let alertMsg = "";
+                if (yData.carbs < yData.carbsTarget) alertMsg += `澱粉差 ${yData.carbsTarget - yData.carbs} 份。`;
+                if (yData.protein < yData.proteinTarget) alertMsg += `蛋白質差 ${yData.proteinTarget - yData.protein} 份。`;
+                
+                if (alertMsg !== "") {
+                    let alertBox = document.getElementById('yesterday-alert');
+                    alertBox.innerText = "⚠️ 尋日未達標提示：\n" + alertMsg;
+                    alertBox.style.display = 'block';
+                }
+            }
+            // 新的一天，初始化並繼承前一天的目標值
+            let prevCarbsTarget = (savedData && savedData.records.carbsTarget) ? savedData.records.carbsTarget : 5;
+            let prevProteinTarget = (savedData && savedData.records.proteinTarget) ? savedData.records.proteinTarget : 5;
+            data = { water: 0, carbs: 0, protein: 0, carbsTarget: prevCarbsTarget, proteinTarget: prevProteinTarget, photo: null };
+            saveToStorage();
+        }
+
+        // 初始化畫面設定
+        document.getElementById('carbs-target').value = data.carbsTarget || 5;
+        document.getElementById('protein-target').value = data.proteinTarget || 5;
+        if (data.photo) {
+            let img = document.getElementById('photo-preview');
+            img.src = data.photo;
+            img.style.display = 'block';
+        }
+        updateUI();
+
+        function saveToStorage() {
+            try {
+                localStorage.setItem('myDietTracker', JSON.stringify({ date: currentDay, records: data }));
+            } catch (e) {
+                alert("儲存空間已滿，可能是相片過大！請清空紀錄。");
+            }
+        }
+
+        // 即時自動儲存功能：綁定所有 input
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', function() {
+                data.carbsTarget = parseFloat(document.getElementById('carbs-target').value) || 0;
+                data.proteinTarget = parseFloat(document.getElementById('protein-target').value) || 0;
+                saveToStorage();
+                updateUI();
+            });
+        });
+
+        function add(type) {
+            let val = parseFloat(document.getElementById(type).value) || 0;
+            data[type] += val;
+            saveToStorage();
+            updateUI();
+        }
+
+        function resetData() {
+            if(confirm('確定要清空今天的紀錄嗎？')) {
+                data = { water: 0, carbs: 0, protein: 0, carbsTarget: data.carbsTarget, proteinTarget: data.proteinTarget, photo: null };
+                document.getElementById('photo-preview').style.display = 'none';
+                document.getElementById('photo-upload').value = "";
+                saveToStorage();
+                updateUI();
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('water-total').innerText = data.water;
+            document.getElementById('carbs-total').innerText = data.carbs;
+            document.getElementById('protein-total').innerText = data.protein;
+
+            let cStatus = document.getElementById('carbs-status');
+            if (data.carbs >= data.carbsTarget) { cStatus.innerHTML = "✅達標"; cStatus.style.color = "green"; } 
+            else { cStatus.innerHTML = "⏳未達標"; cStatus.style.color = "red"; }
+
+            let pStatus = document.getElementById('protein-status');
+            if (data.protein >= data.proteinTarget) { pStatus.innerHTML = "✅達標"; pStatus.style.color = "green"; } 
+            else { pStatus.innerHTML = "⏳未達標"; pStatus.style.color = "red"; }
+        }
+
+        // 相片上傳與壓縮功能
+        document.getElementById('photo-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const MAX_WIDTH = 400; 
+                    const scaleSize = MAX_WIDTH / img.width;
+                    canvas.width = MAX_WIDTH;
+                    canvas.height = img.height * scaleSize;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                    
+                    data.photo = compressedDataUrl;
+                    saveToStorage();
+                    
+                    let preview = document.getElementById('photo-preview');
+                    preview.src = compressedDataUrl;
+                    preview.style.display = 'block';
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        });
+    </script>
+</body>
+</html>
